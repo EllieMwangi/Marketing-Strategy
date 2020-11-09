@@ -38,6 +38,7 @@ library(tidyverse)
 library(psych)
 library(corrplot)
 library(BBmisc)
+library(caret)
 
 ```
 ```{r}
@@ -313,3 +314,25 @@ fviz_cluster(customer_groups, data = model_data)
 
 ```
 After dimension reduction using PCA, the data has been separated into 7 distinct clusters.
+
+### Hierachical Clustering
+```{r}
+# Determine best value for epislon
+dbscan::kNNdistplot(model_data, k =  7)
+abline(h = 0.23, lty = 2)
+```
+
+
+```{r}
+db_groups <- dbscan::dbscan(model_data, eps = 0.23, minPts = 7)
+
+db_groups
+```
+
+```{r}
+fviz_cluster(db_groups, model_data, geom="point")
+```
+ 
+ The clusters in our data are spherical, thus the data naturally clusters into its seven distinct clusters despite dbscan identifying 23clusters.
+ 
+ 
