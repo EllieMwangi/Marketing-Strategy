@@ -37,6 +37,8 @@ library(readr)
 library(tidyverse)
 library(psych)
 library(corrplot)
+library(BBmisc)
+
 ```
 ```{r}
 shoppers <- read_csv("shoppers.csv")
@@ -260,26 +262,54 @@ As expected, there is a high correlation between each type page and the correspo
 ## Solution Implementation
 ### K-Means Clustering
 ```{r}
-# Encode categorical features with their relative frequency
-shoppers_encoded <- shoppers
+# One hot encode categorical features
+new_shoppers <- shoppers[, 1:17]
+new_shoppers[, 10:16] <- as.character(new_shoppers[, 10:16])
+dmy <- dummyVars("~ SpecialDay + Month + OperatingSystems + Browser + Region + TrafficType + VisitorType", data= new_shoppers)
 
-shoppers_encoded[, c(10:16)] <- as.character(shoppers_encoded[, c(10:16)])  
-# Relative frequencies of months 
-round((table(shoppers_encoded$Month) / 12164), 3)
+ohe <- data.frame(predict(dmy, newdata = new_shoppers))
 
-shoppers_encoded <- shoppers_encoded %>%mutate(Month = recode(Month, 'Aug'= 0.036, 'Dec'=0.140, 'Feb'=0.014,'Jul'=0.035, 'June'=0.023, 'Mar'=0.151, 'May'=0.273, 'Nov'=0.245, 'Oct'=0.045, 'Sep'=0.037))
-  
-# Relative frequencies of special days
-round((table(shoppers_encoded$SpecialDay) / 12164), 3)
+model_data <- cbind(new_shoppers[ , 1:9], ohe)
 
+model_data$Weekend <- as.numeric(shoppers$Weekend)
 
-shoppers_encoded %>% shoppers_encoded %>% mutate(SpecialDay = recode(SpecialDay, 0 =0.898, 0.2 = 0.015, 0.4 = 0.020, 0.6 = 0.029, 0.8 = 0.027, 1 = 0.013))
+head(model_data)
+```
+```{r}
+# Normalize continous variables
+model_data[, 1:9] <- normalize(model_data[, 1:9], method = "range")
+```
+```{r}
+library(cluster)
+library(factoextra)
+library(NbClust)
 
+# Perform kmean clustering with 5 clusters
+customer_groups <- kmeans(model_data, centers = 5, nstart = 25) 
 
-
-shoppers_encoded$Weekend <- as.numeric(shoppers_encoded$Weekend)
-
-
-
+str(customer_groups)
 ```
 
+```{r}
+# Size of each cluster
+customer_groups$size
+```
+The first cluster has the most components
+```{r}
+# Visualize  clusters
+
+fviz_cluster(customer_groups, data = model_data)
+```
+
+```{r}
+# The visualization above shows the data is better fitted to 7 clusters
+customer_groups <- kmeans(model_data, centers = 7, nstart = 25)
+
+customer_groups$size
+
+```
+```{r}
+fviz_cluster(customer_groups, data = model_data)
+
+```
+After dimension reduction using PCA, the data has been separated into 7 distinct clusters.
