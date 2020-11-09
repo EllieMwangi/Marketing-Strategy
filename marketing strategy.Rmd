@@ -335,4 +335,18 @@ fviz_cluster(db_groups, model_data, geom="point")
  
  The clusters in our data are spherical, thus the data naturally clusters into its seven distinct clusters despite dbscan identifying 23clusters.
  
+### Cluster Analysis
+
+```{r}
+shoppers <-  shoppers %>% mutate(group = customer_groups$cluster)
+head(shoppers)
+```
+
+```{r}
+# Describe numerical variables
+summary_stats <- shoppers %>% group_by(group)%>% select(Administrative:PageValues, group)%>% summarise_all(mean)
+summary_stats
+
+```
+ 
  
