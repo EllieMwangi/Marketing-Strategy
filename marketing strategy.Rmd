@@ -1,0 +1,285 @@
+---
+title: "Marketing Strategy"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Problem Definition
+#### 1. Specifying Analysis Question
+Perform cluster analysis on customer behaviour data collected by Kira Plastinina, a russian brand to help the sales team identify characteristics of customer groups.
+
+#### 2. Metrics of success
+Specification of distinct customer groups and their distinctive characteristics.
+
+#### 3. Understanding the context
+Kira Plastinina is a Russian brand that is sold through a defunct chain of retail stores in Russia, Ukraine, Kazakhstan, Belarus, China, Philippines, and Armenia. The brand’s Sales and Marketing team would like to understand their customer’s behavior from data that they have collected over the past year. More specifically, they would like to learn the characteristics of customer groups.
+
+#### 4. Recording the experimental design
+- Data Sourcing
+- Check the Data
+- Perform Data Cleaning
+- Perform Exploratory Data Analysis  (Univariate, Bivariate & Multivariate)
+- Implement the Solution
+- Challenge the Solution
+- Follow up Questions
+
+## Data Sourcing
+The dataset for this project is provided as part of the Moringa curriculum. It consists of 18 attributes, 10 numerical and 8 categorical. It consists of metadata collected from customers that visit the Kira Plastinina e-commerce website over the period of one year.
+
+## Data Loading and Inspection
+```{r}
+# Load libraries
+library(readr)
+library(tidyverse)
+library(psych)
+library(corrplot)
+```
+```{r}
+shoppers <- read_csv("shoppers.csv")
+
+# Preview data
+head(shoppers)
+```
+```{r}
+# Shape of data
+dim(shoppers);
+
+# Column datatypes
+str(shoppers);
+```
+
+
+```{r}
+# Get summary of data
+summary(shoppers)
+```
+A number of columns contain null values: ProductRelated,ProductRelated_Duration,BounceRates,ExitRates, Administrative, Administrative_Duration,Informational,Informational_Duration
+
+There appears to be anomalies in the ProductRelated_Duration, Administrative_Duration and Informational_Duration columns with certain examples having a value of -1
+
+```{r}
+# Check for duplicated data
+anyDuplicated(shoppers)
+```
+159 duplicated rows in the data.
+
+```{r}
+# Check for unique values in month and visitor type columns
+unique(shoppers$Month);
+unique(shoppers$VisitorType);
+```
+
+##  Data Cleaning
+
+```{r}
+# Get number of rows with null values
+shoppers[!complete.cases(shoppers),]
+
+```
+All fourteen rows have missing values in all the following columns: ProductRelated, ProductRelated_Duration, BounceRates, ExitRates, Administrative, Administrative_Duration, Informational and Informational_Duration. Drop rows.
+
+```{r}
+# Drop rows
+shoppers <- shoppers[complete.cases(shoppers),]
+
+# Drop duplicated rows
+shoppers <- shoppers[!duplicated(shoppers), ]
+```
+
+```{r}
+# Investigate rows with -1 in duration columns
+anomaly <- shoppers %>% select(c(Administrative_Duration, Administrative, Informational_Duration, Informational, ProductRelated_Duration, ProductRelated)) %>% filter(Administrative_Duration == -1 | Informational_Duration == -1 | ProductRelated_Duration == -1)
+
+anomaly
+```
+33 rows have values of -1 in all three duration columns, which is an anomaly in the data as it means that the customer did not spend any time on any page category be it administrative, informational or product related.
+
+```{r}
+# Drop anomalous data
+shoppers <- shoppers %>% filter(Administrative_Duration != -1, Informational_Duration != -1, ProductRelated_Duration != 1)
+```
+
+
+```{r}
+# describe each column
+describe(shoppers[, c(1:9)])
+```
+All variables are heavily positively skewed and have high kurtosis values with Informational_Duration, ProductRelated_Duration and PageValues being the most heavily skewed. 
+```{r}
+# Custom function for number of outliers per column
+outlier_detector <- function(x){
+  out <- boxplot.stats(x)$out
+  return((length(out)/  12164)*100)
+}
+  
+# Get outlier count per column
+sapply(shoppers[,c(1:9)], outlier_detector)
+```
+```{r}
+# Plot boxplots of columns with high % of outliers
+
+boxplot(shoppers$Informational, shoppers$Informational_Duration, shoppers$PageValues,
+main = "Columns with high values of outliers",
+names = c("Informational", "Informational_Duration", "Page Values"),
+col = c("orange","red"),
+border = "brown",
+notch = TRUE)
+```
+
+All outliers are contained above the third quantile, this indicates that all outliers are contained in the higher ranges of the above variables. Considering the nature of the data, it is entirely possible for customers to spend long durations on informational pages or be browsing pages that have items with high values.Therefore maintain outliers.
+
+## Exploratory Data Analysis
+```{r}
+# Frequency distribution of categorical columns
+sapply(shoppers[, c(10:18)], table)
+```
+
+*Summary of frequency table*
+
+- Months with the highest traffic are May, November, March and December.
+- Most visitors have a type 2 operating system.
+- Most visitors have a type 2 browser.
+- Most visitors to the site are located in region 1
+- Most of the traffic to the website is of type 2 and 1
+- Visitors to the site are mostly returning visitors.
+- Most visits to the site do not earn revenue
+
+```{r}
+# Number of visits to product related pages per month
+product_stats <- shoppers %>% select(ProductRelated, ProductRelated_Duration, Month)%>%group_by(Month)%>% summarise_all(mean)
+
+product_stats[order(product_stats$ProductRelated, decreasing = TRUE),]
+```
+
+November had the highest number of visits to product related pages with the highest duration. 
+
+```{r}
+# Get the distribution of revenue generating visits among visitors
+shoppers %>% select(VisitorType, Revenue)%>% group_by(VisitorType, Revenue)%>% summarise(visits = n())%>% filter(Revenue==TRUE)
+```
+
+Returning visitors have the highest number of revenue generating visitors.
+
+```{r}
+# Get the distribution of revenue generating visits among regions
+shoppers %>% select(Region, Revenue)%>% group_by(Region, Revenue)%>% summarise(visits = n())%>% filter(Revenue==TRUE)
+```
+Visitors located in region 1 have the highest number of revenue generating visits.
+
+```{r}
+# Get page values and visits to product pages based on proximity to a special day
+special_product <- shoppers %>% select(SpecialDay, PageValues, ProductRelated, ProductRelated_Duration)%>% group_by(SpecialDay)%>% summarise_all(mean)
+
+
+ggplot(special_product, aes(x = factor(SpecialDay), y=ProductRelated))+
+  geom_bar(fill = 'lightblue', stat = "identity", width = 0.6) +
+  labs(x = 'SpecialDay')+
+  coord_flip()
+```
+
+On special days customers visit the highest number of product related pages, with the highest mean number of pages visited.
+
+```{r}
+# Distribution of revenue generating visits based on proximity to special days
+revenue_special <- shoppers %>% select(SpecialDay, Revenue)%>% group_by(SpecialDay, Revenue)%>% summarise(count = n())%>% mutate(freq = count / sum(count)) %>% filter(Revenue==TRUE)%>% mutate(freq = round((freq * 100), 1)) 
+
+revenue_special <- revenue_special[order(revenue_special$freq, decreasing = TRUE),]
+
+ggplot(revenue_special, aes(x = factor(SpecialDay), y=freq))+
+  geom_bar(fill = 'lightblue', stat = "identity", width = 0.6) +
+  labs(y = '% of revenue generating', x = 'Special Days' )+
+  coord_flip()
+
+```
+
+
+Ordinary days have the highest percentage of visits that are income generating followed by days 0.6 and 0.2 away from special days.
+
+```{r}
+# Get bounce rates and exit rates among visitor groups
+visitor_stats <- shoppers %>% select(VisitorType, ExitRates, BounceRates)%>% group_by(VisitorType)%>%summarise_all(mean) 
+
+visitor_stats
+
+```
+
+Visitors of type other have the highest exit rates and bounce rates followed by returning visitors.
+
+```{r}
+# Page views and durations based on visitor type
+shoppers %>% select(VisitorType, Administrative:ProductRelated_Duration)%>% group_by(VisitorType)%>%summarise_all(mean)
+
+```
+
+New visitors have the highest mean number of administrative pages visited as well as the longest administrative duration. Returning visitors mostly visit informational and product related pages and spend the longer durations on these pages than other visitor types.
+
+```{r}
+traffic_stats <- shoppers %>% select(TrafficType, ExitRates, BounceRates)%>% group_by(TrafficType)%>% summarise_all(mean)
+
+par(mfrow = c(1,2))
+
+ggplot(traffic_stats, aes(x=TrafficType, y = ExitRates))+
+  geom_bar(stat = "identity", fill="peachpuff2")
+
+ggplot(traffic_stats, aes(x=TrafficType, y = BounceRates))+
+  geom_bar(stat = "identity", fill="peachpuff2")
+
+
+```
+
+Traffic of type 15 and 17 have the highest mean exit rates and bounce rates.
+
+```{r}
+traffic_page_stats <- shoppers %>% select(TrafficType, Administrative:ProductRelated_Duration)%>% group_by(TrafficType)%>% summarise_all(mean)
+
+par(mfrow = c(1,3))
+
+ggplot(traffic_page_stats, aes(x=TrafficType, y = Administrative))+
+  geom_bar(stat = "identity", fill="lightblue")
+
+ggplot(traffic_page_stats, aes(x=TrafficType, y = Informational))+
+  geom_bar(stat = "identity", fill="lightblue")
+
+ggplot(traffic_page_stats, aes(x=TrafficType, y = ProductRelated))+
+  geom_bar(stat = "identity", fill="lightblue")
+```
+
+Traffic type 14 has the highest mean number of product related and infomational pages visited. Traffic type 4 and 14 have the highest mean number of administrative pages visited.
+
+```{r}
+
+corrplot(corr = cor(shoppers[, c(1:9)]), method = "number", type = "upper", order = "hclust", tl.col = "black", tl.cex = 0.6)
+```
+
+As expected, there is a high correlation between each type page and the corresponding page duration. There is also a high correlation between bounce rates and exit rates.
+
+## Solution Implementation
+### K-Means Clustering
+```{r}
+# Encode categorical features with their relative frequency
+shoppers_encoded <- shoppers
+
+shoppers_encoded[, c(10:16)] <- as.character(shoppers_encoded[, c(10:16)])  
+# Relative frequencies of months 
+round((table(shoppers_encoded$Month) / 12164), 3)
+
+shoppers_encoded <- shoppers_encoded %>%mutate(Month = recode(Month, 'Aug'= 0.036, 'Dec'=0.140, 'Feb'=0.014,'Jul'=0.035, 'June'=0.023, 'Mar'=0.151, 'May'=0.273, 'Nov'=0.245, 'Oct'=0.045, 'Sep'=0.037))
+  
+# Relative frequencies of special days
+round((table(shoppers_encoded$SpecialDay) / 12164), 3)
+
+
+shoppers_encoded %>% shoppers_encoded %>% mutate(SpecialDay = recode(SpecialDay, 0 =0.898, 0.2 = 0.015, 0.4 = 0.020, 0.6 = 0.029, 0.8 = 0.027, 1 = 0.013))
+
+
+
+shoppers_encoded$Weekend <- as.numeric(shoppers_encoded$Weekend)
+
+
+
+```
+

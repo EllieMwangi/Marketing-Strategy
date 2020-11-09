@@ -1,0 +1,249 @@
+
+---
+title: "Customer Segmentation"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#### 1. Specifying Analysis Question
+Identify defining characteristics of individuals most likely to click on ads for a cryptography course.
+
+#### 2. Metrics of success
+Can successfully profile individuals most likely to click on ads to enable targeted advertising.
+
+#### 3. Understanding the context
+A Kenyan entrepreneur has created an online cryptography course and would want to advertise it on her blog. She currently targets audiences originating from various countries. In the past, she ran ads to advertise a related course on the same blog and collected data in the process. Using this data, I set out to identify individuals that are most likely to click on her ads.
+
+#### 4. Recording the experimental design
+1. Data loading and overview
+2. Data Cleaning
+3. Univariate analysis
+4. Bivariate analysis
+5. Summary of findings
+
+### Data loading and overview
+
+```{r}
+# Load data
+library(readr)
+library(tidyverse)
+library(lubridate)
+library(caret)
+advertising <- read_csv("advertising.csv", 
+    col_types = cols(Timestamp = col_datetime(format = "%Y-%m-%d %H:%M:%S")))
+
+# Preview first 6 rows
+head(advertising)
+
+```
+```{r}
+# Shape of data
+print(dim(advertising))
+```
+```{r}
+# dataframe summary
+summary(advertising)
+```
+```{r}
+# Check for column data types
+sapply(advertising, class)
+```
+
+
+```{r}
+# Check for missing values
+sapply(advertising,function(x) sum(is.na(x)))
+```
+No missing values in the dataset.
+
+```{r}
+# Remove duplicates
+advertising <- distinct(advertising)
+
+# Check for outliers
+num_data <- advertising %>% select_if(is.numeric)%>%select(-c(Male, `Clicked on Ad`))
+
+lapply(num_data, function(x) boxplot.stats(x)$out)
+```
+8 outliers in the area income column.
+
+```{r}
+# Plot area income
+boxplot(num_data$`Area Income`, xlab='Area Income')
+```
+
+
+```{r}
+# Drop outliers in area income
+outliers <- boxplot.stats(advertising$`Area Income`)$out
+advertising <- advertising[-which(advertising$`Area Income` %in% outliers),]
+```
+
+
+### Univariate and Bivariate analysis
+```{r}
+# Distribution of individuals who clicked and did not click on ads
+table(advertising$`Clicked on Ad`)
+
+```
+
+```{r}
+# Get a frequency table of countries where individuals clicked on ads
+
+country_freq <- sort(table(advertising[advertising$`Clicked on Ad`==1,]$Country), decreasing = T)%>% as.data.frame() 
+country_freq[country_freq$Freq > 2,]
+```
+Countries where most individuals who click on ads come from are Australia, Ethiopia and Turkey.
+
+```{r}
+# Age distribution
+par(mfrow=c(1, 2))
+hist(advertising[advertising$`Clicked on Ad` == 1,]$Age, xlab = 'Age', main = 'Clicked on ads' )
+hist(advertising[advertising$`Clicked on Ad` == 0,]$Age, xlab = 'Age', main = 'Did not click on ads' )
+```
+
+
+Most individuals who click on ads are between 35 and 45 years where as individuals didn't click on ads are between 25 and 35 years.
+
+```{r}
+gender <- subset(advertising, select = c("Male", "Clicked on Ad"))
+gender %>% group_by(Male, `Clicked on Ad`)%>% summarise(sum_of_individuals = n())
+```
+More females than males clicked on ads. Distribution in gender among those who did not click on ads in equal.
+```{r}
+# time on site distribution
+par(mfrow=c(1, 2))
+hist(advertising[advertising$`Clicked on Ad` == 1,]$`Daily Time Spent on Site`, xlab = 'Daily time on site', main = 'Clicked on ads' )
+hist(advertising[advertising$`Clicked on Ad` == 0,]$`Daily Time Spent on Site`, xlab = 'Daily time on site', main = 'Did not click on ads' )
+```
+
+
+Individuals who spend around 40 to 50 daily minutes on the site clicked on ads, while individuals who spend a longer time on the site daily did not click on ads.
+
+```{r}
+# Area income distribution
+par(mfrow=c(1, 2))
+hist(advertising[advertising$`Clicked on Ad` == 1,]$`Area Income`,xlab = 'Area Income', main = 'Clicked on ads' )
+hist(advertising[advertising$`Clicked on Ad` == 0,]$`Area Income`, xlab = 'Area Income', main = 'Did not click on ads' )
+```
+Most individuals with area incomes of 45000 - 55000 clicked on ads, while those with incomes between 60000 and 70000 did not.
+
+```{r}
+# Average area income among individuals who clicked and did not click on ads
+advertising %>% group_by(`Clicked on Ad`)%>% summarise(average_area_income = mean(`Area Income`))
+```
+```{r}
+# time on site distribution
+par(mfrow=c(1, 2))
+hist(advertising[advertising$`Clicked on Ad` == 1,]$`Daily Internet Usage`, xlab = 'Daily internet usage', main = 'Clicked on ads' )
+hist(advertising[advertising$`Clicked on Ad` == 0,]$`Daily Internet Usage`, xlab = 'Daily internet usage', main = 'Did not click on ads' )
+```
+
+Individuals who spend between 100 and 150 minutes daily on the internet clicked on ads.
+
+```{r}
+#Daily internet usage among individuals who clicked and did not click on ads
+advertising %>% group_by(`Clicked on Ad`)%>% summarise(average_internet_usage = mean(`Daily Internet Usage`))
+```
+```{r}
+advertising$`Clicked on Ad` <- as.factor(advertising$`Clicked on Ad`)
+ggplot(advertising, aes(x=`Daily Time Spent on Site`,y=`Daily Internet Usage`, color= `Clicked on Ad`)) +
+geom_point()
+```
+
+Individuals who spent a shorter time on the internet and the site daily clicked on ads.
+
+
+```{r}
+advertising$day_of_week <- weekdays(advertising$Timestamp)
+advertising %>% select(c(day_of_week, `Clicked on Ad`))%>%filter(`Clicked on Ad` == 1) %>% group_by(day_of_week)%>% summarise(number_of_individuals= n())%>% arrange(number_of_individuals)
+
+
+```
+Most individuals clicked on ads on sunday, wednesday and thursday.
+
+```{r}
+hour_clicks <- advertising %>%mutate(hour=hour(Timestamp))%>%filter(`Clicked on Ad` == 1)%>%select(hour)%>% group_by(hour)%>%summarise(number_of_individuals=n())%>%arrange(hour)
+
+ggplot(hour_clicks, aes(x=hour, y=number_of_individuals)) + geom_line() + geom_point()
+```
+
+Most individuals clicked on ads between 7:30am and 9:30 am.
+
+### Implementing the Solution
+```{r}
+# Drop columns
+modelling_data <-advertising %>% select(-c(Timestamp, City, `Ad Topic Line`, Country))
+
+# Split data
+input_data <- createDataPartition(y = modelling_data$`Clicked on Ad`, p=0.7, list = F)
+training <- modelling_data[input_data,]
+testing <- modelling_data[-input_data, ]
+
+
+dim(training);
+dim(testing);
+
+```
+```{r}
+# Apply random forest model
+training$day_of_week <-as.numeric(factor(training$day_of_week))
+testing$day_of_week <-as.numeric(factor(testing$day_of_week))
+
+
+set.seed(42)
+myGrid <- expand.grid(mtry = c(4,5,6),  splitrule = c("gini", "extratrees"),
+                     min.node.size = 10)
+forest_model <- train(`Clicked on Ad` ~ .,
+               data = training,
+               method = "ranger", 
+               tuneGrid = myGrid,
+               trControl = trainControl(method = "cv",
+                                       number = 5,
+                                       verboseIter = FALSE))
+
+# Printing the model
+forest_model
+```
+```{r}
+forest_pred <- predict(forest_model, newdata = testing)
+confusionMatrix(table(forest_pred, testing$`Clicked on Ad`))
+
+```
+```{r}
+# Support vector model
+
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+
+svm_Linear <- train(`Clicked on Ad` ~., data = training, method = "svmLinear",
+trControl=trctrl,
+preProcess = c("center", "scale"),
+tuneLength = 10)
+
+svm_Linear
+```
+
+
+```{r}
+svm_pred <- predict(svm_Linear, newdata = testing)
+confusionMatrix(table(svm_pred, testing$`Clicked on Ad`))
+
+```
+
+### Summary and recommendations
+
+To maximize likelihood of ads getting clicked on, individuals who meet the some or all of the following characteristics should be targeted:
+
+-  Located in one of the following countries:
+Australia,Ethiopia,Turkey,Liberia,Liechtenstein,South Africa,Afghanistan,France,Hungary, Mayotte,Peru and Senegal
+- Is female
+- Has an age that ranges between 35 and 45 years
+- Has an area income that ranges between 45000 and 55000
+- Spends around 40 to 50 minutes daily on the site.
+- Has a daily internet usage of between 100 and 150 minutes
+- Is visiting the site on a Sunday, Wednesday or Thursday
+- Is visiting the site between 7:30 am and 9:30 am
+
+The support vector model and random forest model have similar performance on the testing data both having an accuracy of 0.96 however the support vector classification model has a slightly better accuracy.
